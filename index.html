@@ -18,7 +18,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, onSnapshot, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // Variáveis globais para os serviços do Firebase
     window.firebase = {
@@ -32,7 +32,6 @@
         onSnapshot,
         setDoc,
         collection,
-        query,
     };
   </script>
   <style>
@@ -158,21 +157,20 @@
       const [annualGoalResult, setAnnualGoalResult] = useState(null);
       const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000);
 
-      // Dados iniciais com Julho já como 'Projetado'
+      // Dados iniciais para preencher o banco de dados se ele estiver vazio
       const initialStaticData = [
-        { month: 'Jan', prom: 973, neutr: 52, detra: 40, status: 'Fechado' },
-        { month: 'Fev', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
-        { month: 'Mar', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
-        { month: 'Abr', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
-        { month: 'Mai', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
-        { month: 'Jun', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
-        { month: 'Jul', prom: 990, neutr: 26, detra: 13, status: 'Projetado' }
+        { month: 'Jan', prom: 990, neutr: 26, detra: 13, status: 'Fechado' },
+        { month: 'Fev', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
+        { month: 'Mar', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
+        { month: 'Abr', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
+        { month: 'Mai', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
+        { month: 'Jun', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
+        { month: 'Jul', prom: 973, neutr: 52, detra: 40, status: 'Projetado' },
       ];
       const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
       // Efeito para inicializar o Firebase e o listener do Firestore
       useEffect(() => {
-        // Assegura que o script do Firebase foi carregado
         if (window.firebase) {
           const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore, collection, onSnapshot, setDoc, doc } = window.firebase;
 
@@ -184,7 +182,6 @@
             const app = initializeApp(firebaseConfig);
             const firestoreDb = getFirestore(app);
             const auth = getAuth(app);
-
             setDb(firestoreDb);
 
             const signIn = async () => {
@@ -194,33 +191,27 @@
                 await signInAnonymously(auth);
               }
             };
-            
             signIn();
 
-            onAuthStateChanged(auth, (user) => {
+            onAuthStateChanged(auth, async (user) => {
               if (user) {
                 const currentUserId = user.uid;
                 setUserId(currentUserId);
                 
-                // Caminho da coleção de dados privados
                 const collectionPath = `/artifacts/${appId}/users/${currentUserId}/nps-projections`;
                 const q = collection(firestoreDb, collectionPath);
                 
-                // Listener em tempo real para a coleção
                 const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-                  const fetchedData = querySnapshot.docs.map(doc => ({
-                    month: doc.id,
-                    ...doc.data()
-                  }));
+                  const fetchedData = querySnapshot.docs.map(d => ({ month: d.id, ...d.data() }));
                   
-                  // Se a coleção estiver vazia, preenche com os dados iniciais
                   if (fetchedData.length === 0) {
+                      // Se a coleção estiver vazia, preenche com os dados iniciais
                       for (const monthData of initialStaticData) {
                           const docRef = doc(firestoreDb, collectionPath, monthData.month);
                           await setDoc(docRef, monthData);
                       }
                       
-                      // Preenche os meses restantes com projeção
+                      // Preenche os meses restantes com base na média dos últimos 4 meses
                       const lastFourMonths = initialStaticData.filter(d => d.status === 'Fechado').slice(-4);
                       const avgData = lastFourMonths.reduce((acc, curr) => {
                           acc.prom += curr.prom;
@@ -245,19 +236,19 @@
                       }
                       
                   } else {
-                    // Ordena os dados antes de atualizar o estado
-                    const orderedData = allMonths.map(month => {
-                        const existingMonth = fetchedData.find(d => d.month === month);
-                        return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
-                    });
-                    setData(orderedData);
-                    setLoading(false);
+                      // Se houver dados, atualiza o estado com eles
+                      const orderedData = allMonths.map(month => {
+                          const existingMonth = fetchedData.find(d => d.month === month);
+                          return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
+                      });
+                      setData(orderedData);
+                      setLoading(false);
                   }
                 }, (error) => {
                   console.error("Erro ao ouvir a coleção do Firestore:", error);
                 });
 
-                return () => unsubscribe(); // Limpeza do listener
+                return () => unsubscribe();
               } else {
                 setLoading(false);
               }
@@ -269,7 +260,6 @@
         }
       }, []);
 
-      // Função para salvar dados no Firestore
       const saveToFirestore = async (month, newData) => {
         if (!db || !userId) {
           console.error("Banco de dados ou ID de usuário não disponíveis.");
@@ -340,7 +330,7 @@
         const closedData = data.filter(d => d.status === 'Fechado');
         const initialTotalNotes = closedData.reduce((sum, d) => sum + d.prom + d.neutr + d.detra, 0);
         const initialTotalNeutrals = closedData.reduce((sum, d) => sum + d.neutr, 0);
-        const neutralRatio = initialTotalNeutrals > 0 && initialTotalNotes > 0 ? initialTotalNeutrals / initialTotalNotes : 0.05; // Fallback para 5% de neutros
+        const neutralRatio = initialTotalNeutrals > 0 && initialTotalNotes > 0 ? initialTotalNeutrals / initialTotalNotes : 0.05;
         
         for (let i = 0; i < 12; i++) {
           const notes = totalNotas;
@@ -377,7 +367,7 @@
       
         const projectedTotalAnnualVolume = pastMetrics.totalVolume + (monthsToProject * projectedTotalNotes);
         const currentNps = calculateNps(pastMetrics.totalPromoters, pastMetrics.totalDetractors, pastMetrics.totalVolume);
-        const neutralRatio = pastMetrics.totalNeutrals > 0 && pastMetrics.totalVolume > 0 ? pastMetrics.totalNeutrals / pastMetrics.totalVolume : 0.05; // Fallback para 5% de neutros
+        const neutralRatio = pastMetrics.totalNeutrals > 0 && pastMetrics.totalVolume > 0 ? pastMetrics.totalNeutrals / pastMetrics.totalVolume : 0.05;
         
         const targetPromotersDetractorsSum = projectedTotalAnnualVolume - (projectedTotalAnnualVolume * neutralRatio);
         const targetPromotersDetractorsDiff = (annualTargetNps / 100) * projectedTotalAnnualVolume;
