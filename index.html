@@ -14,28 +14,6 @@
   <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <!-- Recharts para os gráficos -->
   <script crossorigin src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
-  <!-- Firebase SDK para persistência de dados -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, onSnapshot, setDoc, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // Variáveis globais para os serviços do Firebase
-    window.firebase = {
-        initializeApp,
-        getAuth,
-        signInAnonymously,
-        signInWithCustomToken,
-        onAuthStateChanged,
-        getFirestore,
-        doc,
-        onSnapshot,
-        setDoc,
-        collection,
-        getDocs,
-        query
-    };
-  </script>
   <style>
     /* Estilo para a fonte "Inter" */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -48,12 +26,14 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Desenvolvedora responsável: Adriana Fernandes Paiva
+    // Espera que todos os scripts e o DOM estejam carregados antes de iniciar a aplicação React
     window.onload = function() {
       const { useState, useMemo, useEffect } = React;
+      // As componentes Recharts são desestruturadas aqui dentro do onLOAD,
+      // garantindo que o objeto global 'Recharts' já está definido e disponível.
       const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
 
-      // Componentes de UI básicos com estilo Tailwind
+      // Componentes recriados do shadcn para evitar erros de importação
       const Card = ({ children, className }) => (
         <div className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}>
           {children}
@@ -152,135 +132,53 @@
         </div>
       );
 
+      // O componente App é o container principal da nossa aplicação
       const App = () => {
-        const [data, setData] = useState([]);
-        const [loading, setLoading] = useState(true);
-        const [userId, setUserId] = useState(null);
-        const [db, setDb] = useState(null);
+        // Dados iniciais consolidados. Julho agora é 'Projetado'.
+        const initialCombinedData = [
+          { month: 'Jan', prom: 973, neutr: 52, detra: 40, status: 'Fechado' },
+          { month: 'Fev', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
+          { month: 'Mar', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
+          { month: 'Abr', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
+          { month: 'Mai', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
+          { month: 'Jun', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
+          { month: 'Jul', prom: 990, neutr: 26, detra: 13, status: 'Projetado' }
+        ];
+
+        const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        // Projeção automática para meses não preenchidos
+        const initialProjectionData = useMemo(() => {
+          const lastFourMonths = initialCombinedData.filter(d => d.status === 'Fechado').slice(-4);
+          const avgData = lastFourMonths.reduce((acc, curr) => {
+            acc.prom += curr.prom;
+            acc.neutr += curr.neutr;
+            acc.detra += curr.detra;
+            return acc;
+          }, { prom: 0, neutr: 0, detra: 0 });
+        
+          const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
+          const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
+          const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
+        
+          const fullData = [...initialCombinedData];
+          for (let i = initialCombinedData.length; i < allMonths.length; i++) {
+            fullData.push({
+              month: allMonths[i],
+              prom: avgProm,
+              neutr: avgNeutr,
+              detra: avgDetra,
+              status: 'Projetado',
+            });
+          }
+          return fullData;
+        }, []);
+        
+        const [data, setData] = useState(initialProjectionData);
         const [totalNotas, setTotalNotas] = useState(1000);
         const [inverseResults, setInverseResults] = useState([]);
         const [annualGoalResult, setAnnualGoalResult] = useState(null);
         const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000);
-
-        // Dados iniciais atualizados com base na última imagem fornecida pelo usuário
-        const initialStaticData = [
-            { month: 'Jan', prom: 990, neutr: 26, detra: 13, status: 'Fechado' },
-            { month: 'Fev', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
-            { month: 'Mar', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
-            { month: 'Abr', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
-            { month: 'Mai', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
-            { month: 'Jun', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
-            { month: 'Jul', prom: 973, neutr: 52, detra: 40, status: 'Projetado' }
-        ];
-        const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-        // Efeito para inicializar o Firebase e o listener do Firestore
-        useEffect(() => {
-          if (window.firebase) {
-            const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore, collection, onSnapshot, setDoc, doc, getDocs } = window.firebase;
-            
-            try {
-              const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-              const firebaseConfig = JSON.parse(__firebase_config);
-              const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-              
-              const app = initializeApp(firebaseConfig);
-              const firestoreDb = getFirestore(app);
-              const auth = getAuth(app);
-              setDb(firestoreDb);
-
-              const unsubscribe = onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                  const currentUserId = user.uid;
-                  setUserId(currentUserId);
-                  
-                  const collectionPath = `/artifacts/${appId}/users/${currentUserId}/nps-projections`;
-                  
-                  // Popula com dados iniciais se a coleção estiver vazia
-                  const querySnapshot = await getDocs(collection(firestoreDb, collectionPath));
-                  if (querySnapshot.empty) {
-                      const closedMonths = initialStaticData.filter(d => d.status === 'Fechado');
-                      const lastClosedData = closedMonths[closedMonths.length - 1];
-                      
-                      const promises = closedMonths.map(monthData => {
-                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
-                          return setDoc(docRef, monthData);
-                      });
-                      
-                      const lastFourMonths = closedMonths.slice(-4);
-                      const avgData = lastFourMonths.reduce((acc, curr) => {
-                          acc.prom += curr.prom;
-                          acc.neutr += curr.neutr;
-                          acc.detra += curr.detra;
-                          return acc;
-                      }, { prom: 0, neutr: 0, detra: 0 });
-                      const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
-                      const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
-                      const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
-
-                      const startIndex = allMonths.indexOf(lastClosedData.month) + 1;
-                      for (let i = startIndex; i < allMonths.length; i++) {
-                          const monthData = {
-                              month: allMonths[i],
-                              prom: avgProm,
-                              neutr: avgNeutr,
-                              detra: avgDetra,
-                              status: 'Projetado'
-                          };
-                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
-                          promises.push(setDoc(docRef, monthData));
-                      }
-                      
-                      await Promise.all(promises);
-                  }
-                  
-                  // Listener em tempo real para a coleção
-                  const unsubscribeSnapshot = onSnapshot(collection(firestoreDb, collectionPath), (querySnapshot) => {
-                    const fetchedData = querySnapshot.docs.map(d => ({ month: d.id, ...d.data() }));
-                    const orderedData = allMonths.map(month => {
-                      const existingMonth = fetchedData.find(d => d.month === month);
-                      return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
-                    });
-                    setData(orderedData);
-                    setLoading(false);
-                  }, (error) => {
-                    console.error("Erro ao ouvir a coleção do Firestore:", error);
-                  });
-
-                  return () => unsubscribeSnapshot(); // Limpeza do listener
-                } else {
-                  if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                  } else {
-                    await signInAnonymously(auth);
-                  }
-                  setLoading(false);
-                }
-              });
-
-              return () => unsubscribe(); // Limpeza do listener de autenticação
-            } catch (e) {
-              console.error("Erro ao inicializar o Firebase:", e);
-              setLoading(false);
-            }
-          }
-        }, []);
-
-        // Função para salvar no Firestore
-        const saveToFirestore = async (month, newData) => {
-          if (!db || !userId) {
-            console.error("Banco de dados ou ID de usuário não disponíveis.");
-            return;
-          }
-          
-          try {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const docRef = window.firebase.doc(db, `/artifacts/${appId}/users/${userId}/nps-projections`, month);
-            await window.firebase.setDoc(docRef, newData, { merge: true });
-          } catch (e) {
-            console.error("Erro ao salvar no Firestore:", e);
-          }
-        };
 
         const calculateNps = (promoters, detractors, total) => {
           if (total === 0) return 0;
@@ -288,7 +186,6 @@
         };
         
         const npsProjectionData = useMemo(() => {
-          if (loading) return [];
           return data.map(monthData => {
             const totalVolume = monthData.prom + monthData.neutr + monthData.detra;
             const npsCx = calculateNps(monthData.prom, monthData.detra, totalVolume);
@@ -298,7 +195,7 @@
               npsCx
             };
           });
-        }, [data, loading]);
+        }, [data]);
 
         const annualTotals = useMemo(() => {
           const totalProm = npsProjectionData.reduce((sum, d) => sum + d.prom, 0);
@@ -310,51 +207,57 @@
         }, [npsProjectionData]);
         
         const neutralPerDetractor = useMemo(() => {
-          const closedData = data.filter(d => d.status === 'Fechado');
+          const closedData = initialCombinedData.filter(d => d.status === 'Fechado');
           const totalNeutrosFechado = closedData.reduce((sum, d) => sum + d.neutr, 0);
           const totalDetratoresFechado = closedData.reduce((sum, d) => sum + d.detra, 0);
           return totalDetratoresFechado > 0 ? parseFloat(totalNeutrosFechado / totalDetratoresFechado).toFixed(1) : 0;
-        }, [data]);
+        }, []);
         
+        // Agora, esta função é mais simples e não precisa verificar o status,
+        // pois a propriedade `disabled` do input já o faz.
         const handleProjectionChange = (index, type, value) => {
-          const newValue = parseInt(value, 10) || 0;
           const newData = [...data];
-          newData[index][type] = newValue;
+          newData[index][type] = parseInt(value, 10) || 0;
           setData(newData);
         };
 
+        // Função de alteração de status, agora sem desabilitar o select e sem resetar os valores.
         const handleStatusChange = (index, newStatus) => {
           const newData = [...data];
           newData[index].status = newStatus;
+
+          // Se o status for alterado para 'Projetado', preenche com a projeção
+          // Se for alterado para 'Fechado', os inputs ficam desabilitados, mas os valores são mantidos.
           if (newStatus === 'Projetado') {
-              const closedMonthsBefore = newData.slice(0, index).filter(d => d.status === 'Fechado');
-              const lastFourMonths = closedMonthsBefore.length >= 4 ? closedMonthsBefore.slice(-4) : closedMonthsBefore;
-              const avgData = lastFourMonths.reduce((acc, curr) => {
-                  acc.prom += curr.prom;
-                  acc.neutr += curr.neutr;
-                  acc.detra += curr.detra;
-                  return acc;
-              }, { prom: 0, neutr: 0, detra: 0 });
+             const lastFourMonths = newData.slice(0, index).filter(d => d.status === 'Fechado').slice(-4);
+            const avgData = lastFourMonths.reduce((acc, curr) => {
+              acc.prom += curr.prom;
+              acc.neutr += curr.neutr;
+              acc.detra += curr.detra;
+              return acc;
+            }, { prom: 0, neutr: 0, detra: 0 });
 
-              const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
-              const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
-              const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
+            const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
+            const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
+            const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
 
-              newData[index].prom = avgProm;
-              newData[index].neutr = avgNeutr;
-              newData[index].detra = avgDetra;
+            newData[index].prom = avgProm;
+            newData[index].neutr = avgNeutr;
+            newData[index].detra = avgDetra;
           }
+
           setData(newData);
         };
         
         const handleInverseCalculation = () => {
           const targetNps = 95;
           const results = [];
+          
           const closedData = data.filter(d => d.status === 'Fechado');
           const initialTotalNotes = closedData.reduce((sum, d) => sum + d.prom + d.neutr + d.detra, 0);
           const initialTotalNeutrals = closedData.reduce((sum, d) => sum + d.neutr, 0);
-          const neutralRatio = initialTotalNotes > 0 ? initialTotalNeutrals / initialTotalNotes : 0.05;
-          
+          const neutralRatio = initialTotalNeutrals / initialTotalNotes;
+        
           for (let i = 0; i < 12; i++) {
             const notes = totalNotas;
             const neutrals = Math.round(notes * neutralRatio);
@@ -390,7 +293,7 @@
         
           const projectedTotalAnnualVolume = pastMetrics.totalVolume + (monthsToProject * projectedTotalNotes);
           const currentNps = calculateNps(pastMetrics.totalPromoters, pastMetrics.totalDetractors, pastMetrics.totalVolume);
-          const neutralRatio = pastMetrics.totalVolume > 0 ? pastMetrics.totalNeutrals / pastMetrics.totalVolume : 0.05;
+          const neutralRatio = pastMetrics.totalNeutrals / pastMetrics.totalVolume;
           
           const targetPromotersDetractorsSum = projectedTotalAnnualVolume - (projectedTotalAnnualVolume * neutralRatio);
           const targetPromotersDetractorsDiff = (annualTargetNps / 100) * projectedTotalAnnualVolume;
@@ -425,26 +328,9 @@
           });
         };
         
-        // Ação de salvar: agora recebe o objeto de dados completo da linha
-        const handleSave = (monthDataToSave) => {
-            saveToFirestore(monthDataToSave.month, monthDataToSave);
-        };
-        
-        if (loading) {
-          return (
-            <div className="flex items-center justify-center min-h-screen">
-              <div className="text-xl font-medium text-gray-700">Carregando dados...</div>
-            </div>
-          );
-        }
 
         return (
           <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-sans">
-            {userId && (
-              <div className="mb-4 p-2 text-center text-sm text-gray-600 bg-gray-200 rounded-lg shadow-sm">
-                ID do Usuário: <span className="font-mono text-gray-800">{userId}</span>
-              </div>
-            )}
             <Card className="max-w-7xl mx-auto rounded-xl shadow-lg">
               <CardHeader className="bg-red-800 text-white rounded-t-xl p-6">
                 <CardTitle className="text-3xl font-bold">Simulador e Projeção de NPS</CardTitle>
@@ -478,14 +364,13 @@
                             <th className="p-3">Detratores</th>
                             <th className="p-3">Vol. Total</th>
                             <th className="p-3">NPS CX</th>
-                            <th className="p-3">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
                           {npsProjectionData.map((monthData, index) => (
                             <tr key={index} className={`border-b ${monthData.status === 'Projetado' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                               <td className="p-3 font-medium border-r">{monthData.month}</td>
-                              <td className="p-3 border-r text-sm text-center flex items-center space-x-2">
+                              <td className="p-3 border-r text-sm text-center">
                                 <select
                                   value={monthData.status}
                                   onChange={(e) => handleStatusChange(index, e.target.value)}
@@ -525,14 +410,9 @@
                               </td>
                               <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
                               <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
-                              <td className="p-3">
-                                {/* O botão agora passa o objeto `monthData` completo para a função `handleSave` */}
-                                <Button onClick={() => handleSave(monthData)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
-                                  Salvar
-                                </Button>
-                              </td>
                             </tr>
                           ))}
+                          {/* Linha de Subtotal Anual */}
                           <tr className="border-b bg-red-800 text-white font-bold text-lg">
                             <td className="p-3 border-r" colSpan="2">Subtotal Anual</td>
                             <td className="p-3 text-center">{annualTotals.totalProm}</td>
@@ -540,7 +420,6 @@
                             <td className="p-3 text-center">{annualTotals.totalDetra}</td>
                             <td className="p-3 text-center">{annualTotals.totalVolume}</td>
                             <td className="p-3 text-center">{annualTotals.annualNps}%</td>
-                            <td className="p-3"></td>
                           </tr>
                         </tbody>
                       </table>
@@ -681,19 +560,14 @@
                   </TabsContent>
                 </Tabs>
               </CardContent>
-              <div className="bg-gray-200 text-gray-700 p-4 text-center text-sm rounded-b-xl">
-                Desenvolvido por: Adriana Fernandes Paiva
-              </div>
             </Card>
           </div>
         );
       };
 
       const rootElement = document.getElementById('root');
-      if (rootElement) {
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(<App />);
-      }
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(<App />);
     };
   </script>
 </body>
