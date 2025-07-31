@@ -48,6 +48,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
+    // Desenvolvedora responsável: Adriana Fernandes Paiva
     const { useState, useMemo, useEffect } = React;
     const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
 
@@ -188,15 +189,6 @@
             const auth = getAuth(app);
             setDb(firestoreDb);
 
-            const signIn = async () => {
-              if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-              } else {
-                await signInAnonymously(auth);
-              }
-            };
-            signIn();
-
             onAuthStateChanged(auth, async (user) => {
               if (user) {
                 const currentUserId = user.uid;
@@ -204,54 +196,50 @@
                 
                 const collectionPath = `/artifacts/${appId}/users/${currentUserId}/nps-projections`;
                 
+                // Verifica se já existem dados. Se não, preenche com os dados iniciais.
+                const querySnapshot = await getDocs(collection(firestoreDb, collectionPath));
+                if (querySnapshot.empty) {
+                    const lastClosedData = initialStaticData[initialStaticData.length - 1];
+                    const closedMonths = initialStaticData.filter(d => d.status === 'Fechado');
+                    
+                    for (const monthData of closedMonths) {
+                        const docRef = doc(firestoreDb, collectionPath, monthData.month);
+                        await setDoc(docRef, monthData);
+                    }
+
+                    const lastFourMonths = closedMonths.slice(-4);
+                    const avgData = lastFourMonths.reduce((acc, curr) => {
+                        acc.prom += curr.prom;
+                        acc.neutr += curr.neutr;
+                        acc.detra += curr.detra;
+                        return acc;
+                    }, { prom: 0, neutr: 0, detra: 0 });
+                    const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
+                    const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
+                    const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
+
+                    const startIndex = allMonths.indexOf(lastClosedData.month) + 1;
+                    for (let i = startIndex; i < allMonths.length; i++) {
+                        const monthData = {
+                            month: allMonths[i],
+                            prom: avgProm,
+                            neutr: avgNeutr,
+                            detra: avgDetra,
+                            status: 'Projetado'
+                        };
+                        const docRef = doc(firestoreDb, collectionPath, monthData.month);
+                        await setDoc(docRef, monthData);
+                    }
+                }
+                
                 // Listener em tempo real para a coleção
                 const unsubscribe = onSnapshot(collection(firestoreDb, collectionPath), async (querySnapshot) => {
                   const fetchedData = querySnapshot.docs.map(d => ({ month: d.id, ...d.data() }));
-                  
-                  if (querySnapshot.empty) {
-                      // Coleção vazia, preenche com os dados iniciais
-                      const lastClosedData = initialStaticData[initialStaticData.length - 1];
-                      const closedMonths = initialStaticData.filter(d => d.status === 'Fechado');
-                      
-                      // Insere todos os meses fechados
-                      for (const monthData of closedMonths) {
-                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
-                          await setDoc(docRef, monthData);
-                      }
-
-                      // Calcula a média dos últimos 4 meses fechados para projeção
-                      const lastFourMonths = closedMonths.slice(-4);
-                      const avgData = lastFourMonths.reduce((acc, curr) => {
-                          acc.prom += curr.prom;
-                          acc.neutr += curr.neutr;
-                          acc.detra += curr.detra;
-                          return acc;
-                      }, { prom: 0, neutr: 0, detra: 0 });
-                      const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
-                      const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
-                      const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
-
-                      // Preenche os meses restantes como 'Projetado'
-                      const startIndex = allMonths.indexOf(lastClosedData.month) + 1;
-                      for (let i = startIndex; i < allMonths.length; i++) {
-                          const monthData = {
-                              month: allMonths[i],
-                              prom: avgProm,
-                              neutr: avgNeutr,
-                              detra: avgDetra,
-                              status: 'Projetado'
-                          };
-                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
-                          await setDoc(docRef, monthData);
-                      }
-                  } else {
-                      // Ordena os dados antes de atualizar o estado
-                      const orderedData = allMonths.map(month => {
-                          const existingMonth = fetchedData.find(d => d.month === month);
-                          return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
-                      });
-                      setData(orderedData);
-                  }
+                  const orderedData = allMonths.map(month => {
+                    const existingMonth = fetchedData.find(d => d.month === month);
+                    return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
+                  });
+                  setData(orderedData);
                   setLoading(false);
                 }, (error) => {
                   console.error("Erro ao ouvir a coleção do Firestore:", error);
@@ -324,14 +312,12 @@
         const newData = [...data];
         newData[index][type] = newValue;
         setData(newData);
-        saveToFirestore(newData[index].month, newData[index]);
       };
 
       const handleStatusChange = (index, newStatus) => {
         const newData = [...data];
         newData[index].status = newStatus;
         setData(newData);
-        saveToFirestore(newData[index].month, newData[index]);
       };
       
       const handleInverseCalculation = () => {
@@ -411,6 +397,11 @@
           monthlyNeutrals: isAchievable ? Math.round(remainingNeutralsNeeded / monthsToProject) : 'N/A',
         });
       };
+
+      const handleSave = (index) => {
+          const monthDataToSave = data[index];
+          saveToFirestore(monthDataToSave.month, monthDataToSave);
+      };
       
       if (loading) {
         return (
@@ -460,13 +451,14 @@
                           <th className="p-3">Detratores</th>
                           <th className="p-3">Vol. Total</th>
                           <th className="p-3">NPS CX</th>
+                          <th className="p-3">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
                         {npsProjectionData.map((monthData, index) => (
                           <tr key={index} className={`border-b ${monthData.status === 'Projetado' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                             <td className="p-3 font-medium border-r">{monthData.month}</td>
-                            <td className="p-3 border-r text-sm text-center">
+                            <td className="p-3 border-r text-sm text-center flex items-center space-x-2">
                               <select
                                 value={monthData.status}
                                 onChange={(e) => handleStatusChange(index, e.target.value)}
@@ -506,6 +498,11 @@
                             </td>
                             <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
                             <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
+                            <td className="p-3">
+                              <Button onClick={() => handleSave(index)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                                Salvar
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                         <tr className="border-b bg-red-800 text-white font-bold text-lg">
@@ -515,6 +512,7 @@
                           <td className="p-3 text-center">{annualTotals.totalDetra}</td>
                           <td className="p-3 text-center">{annualTotals.totalVolume}</td>
                           <td className="p-3 text-center">{annualTotals.annualNps}%</td>
+                          <td className="p-3"></td>
                         </tr>
                       </tbody>
                     </table>
@@ -655,6 +653,9 @@
                 </TabsContent>
               </Tabs>
             </CardContent>
+            <div className="bg-gray-200 text-gray-700 p-4 text-center text-sm rounded-b-xl">
+              Desenvolvido por: Adriana Fernandes Paiva
+            </div>
           </Card>
         </div>
       );
