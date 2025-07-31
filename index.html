@@ -134,7 +134,7 @@
 
       // O componente App é o container principal da nossa aplicação
       const App = () => {
-        // Dados iniciais consolidados
+        // Dados iniciais consolidados. Julho agora é 'Projetado'.
         const initialCombinedData = [
           { month: 'Jan', prom: 973, neutr: 52, detra: 40, status: 'Fechado' },
           { month: 'Fev', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
@@ -142,14 +142,14 @@
           { month: 'Abr', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
           { month: 'Mai', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
           { month: 'Jun', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
-          { month: 'Jul', prom: 990, neutr: 26, detra: 13, status: 'Fechado' }
+          { month: 'Jul', prom: 990, neutr: 26, detra: 13, status: 'Projetado' }
         ];
 
         const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
         
         // Projeção automática para meses não preenchidos
         const initialProjectionData = useMemo(() => {
-          const lastFourMonths = initialCombinedData.slice(-4);
+          const lastFourMonths = initialCombinedData.filter(d => d.status === 'Fechado').slice(-4);
           const avgData = lastFourMonths.reduce((acc, curr) => {
             acc.prom += curr.prom;
             acc.neutr += curr.neutr;
@@ -157,9 +157,9 @@
             return acc;
           }, { prom: 0, neutr: 0, detra: 0 });
         
-          const avgProm = Math.round(avgData.prom / lastFourMonths.length);
-          const avgNeutr = Math.round(avgData.neutr / lastFourMonths.length);
-          const avgDetra = Math.round(avgData.detra / lastFourMonths.length);
+          const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
+          const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
+          const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
         
           const fullData = [...initialCombinedData];
           for (let i = initialCombinedData.length; i < allMonths.length; i++) {
@@ -174,20 +174,17 @@
           return fullData;
         }, []);
         
-        // Estado para armazenar os dados do simulador, inicializado com a projeção
         const [data, setData] = useState(initialProjectionData);
         const [totalNotas, setTotalNotas] = useState(1000);
         const [inverseResults, setInverseResults] = useState([]);
         const [annualGoalResult, setAnnualGoalResult] = useState(null);
         const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000);
 
-        // Função para calcular o NPS
         const calculateNps = (promoters, detractors, total) => {
           if (total === 0) return 0;
           return parseFloat(((promoters - detractors) / total) * 100).toFixed(1);
         };
         
-        // Projeção do NPS CX com base nos dados
         const npsProjectionData = useMemo(() => {
           return data.map(monthData => {
             const totalVolume = monthData.prom + monthData.neutr + monthData.detra;
@@ -200,7 +197,6 @@
           });
         }, [data]);
 
-        // Cálculo dos subtotais anuais e NPS anual
         const annualTotals = useMemo(() => {
           const totalProm = npsProjectionData.reduce((sum, d) => sum + d.prom, 0);
           const totalNeutr = npsProjectionData.reduce((sum, d) => sum + d.neutr, 0);
@@ -210,7 +206,6 @@
           return { totalProm, totalNeutr, totalDetra, totalVolume, annualNps };
         }, [npsProjectionData]);
         
-        // Cálculo da proporção de neutros para detratores nos dados fechados
         const neutralPerDetractor = useMemo(() => {
           const closedData = initialCombinedData.filter(d => d.status === 'Fechado');
           const totalNeutrosFechado = closedData.reduce((sum, d) => sum + d.neutr, 0);
@@ -218,31 +213,23 @@
           return totalDetratoresFechado > 0 ? parseFloat(totalNeutrosFechado / totalDetratoresFechado).toFixed(1) : 0;
         }, []);
         
-        // Handle de alteração nos inputs da projeção
+        // Agora, esta função é mais simples e não precisa verificar o status,
+        // pois a propriedade `disabled` do input já o faz.
         const handleProjectionChange = (index, type, value) => {
-          // Apenas permite a alteração se o status for 'Projetado'
-          if (data[index].status === 'Projetado') {
-            const newData = [...data];
-            newData[index][type] = parseInt(value, 10) || 0;
-            setData(newData);
-          }
+          const newData = [...data];
+          newData[index][type] = parseInt(value, 10) || 0;
+          setData(newData);
         };
 
-        // Handle para o picklist de status
+        // Função de alteração de status, agora sem desabilitar o select e sem resetar os valores.
         const handleStatusChange = (index, newStatus) => {
           const newData = [...data];
-          // Atualiza o status
           newData[index].status = newStatus;
-          
-          // Se o status for alterado para 'Fechado', os valores de promotores, detratores e neutros são zerados para serem preenchidos pelo usuário
-          if (newStatus === 'Fechado') {
-            newData[index].prom = 0;
-            newData[index].detra = 0;
-            newData[index].neutr = 0;
-          }
-          // Se o status for alterado para 'Projetado', os valores voltam para a projeção automática
-          else if (newStatus === 'Projetado') {
-            const lastFourMonths = newData.slice(0, index).filter(d => d.status === 'Fechado').slice(-4);
+
+          // Se o status for alterado para 'Projetado', preenche com a projeção
+          // Se for alterado para 'Fechado', os inputs ficam desabilitados, mas os valores são mantidos.
+          if (newStatus === 'Projetado') {
+             const lastFourMonths = newData.slice(0, index).filter(d => d.status === 'Fechado').slice(-4);
             const avgData = lastFourMonths.reduce((acc, curr) => {
               acc.prom += curr.prom;
               acc.neutr += curr.neutr;
@@ -258,11 +245,10 @@
             newData[index].neutr = avgNeutr;
             newData[index].detra = avgDetra;
           }
-          
+
           setData(newData);
         };
         
-        // Handle de cálculo do NPS inverso
         const handleInverseCalculation = () => {
           const targetNps = 95;
           const results = [];
@@ -292,7 +278,6 @@
           setInverseResults(results);
         };
         
-        // Nova função para calcular a meta de NPS 95 para o ano
         const handleAnnualGoalCalculation = () => {
           const monthsPast = data.filter(d => d.status === 'Fechado').length;
           const monthsToProject = allMonths.length - monthsPast;
@@ -390,8 +375,7 @@
                                   value={monthData.status}
                                   onChange={(e) => handleStatusChange(index, e.target.value)}
                                   className={`block w-full rounded-md border border-gray-300 p-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500
-                                  ${index < initialCombinedData.length ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900'}`}
-                                  disabled={index < initialCombinedData.length}
+                                  ${monthData.status === 'Fechado' ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-900'}`}
                                 >
                                   <option value="Fechado">Fechado</option>
                                   <option value="Projetado">Projetado</option>
