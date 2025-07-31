@@ -14,6 +14,28 @@
   <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <!-- Recharts para os gráficos -->
   <script crossorigin src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+  <!-- Firebase SDK para persistência de dados -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Variáveis globais para os serviços do Firebase
+    window.firebase = {
+        initializeApp,
+        getAuth,
+        signInAnonymously,
+        signInWithCustomToken,
+        onAuthStateChanged,
+        getFirestore,
+        doc,
+        onSnapshot,
+        setDoc,
+        collection,
+        getDocs,
+        query
+    };
+  </script>
   <style>
     /* Estilo para a fonte "Inter" */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -26,548 +48,624 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Espera que todos os scripts e o DOM estejam carregados antes de iniciar a aplicação React
-    window.onload = function() {
-      const { useState, useMemo, useEffect } = React;
-      // As componentes Recharts são desestruturadas aqui dentro do onLOAD,
-      // garantindo que o objeto global 'Recharts' já está definido e disponível.
-      const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
+    const { useState, useMemo, useEffect } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
 
-      // Componentes recriados do shadcn para evitar erros de importação
-      const Card = ({ children, className }) => (
-        <div className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}>
-          {children}
-        </div>
-      );
+    // Componentes de UI básicos com estilo Tailwind
+    const Card = ({ children, className }) => (
+      <div className={`rounded-xl border bg-card text-card-foreground shadow ${className}`}>
+        {children}
+      </div>
+    );
 
-      const CardHeader = ({ children, className }) => (
-        <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
-          {children}
-        </div>
-      );
+    const CardHeader = ({ children, className }) => (
+      <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
+        {children}
+      </div>
+    );
 
-      const CardTitle = ({ children, className }) => (
-        <h3 className={`font-semibold tracking-tight text-2xl ${className}`}>
-          {children}
-        </h3>
-      );
+    const CardTitle = ({ children, className }) => (
+      <h3 className={`font-semibold tracking-tight text-2xl ${className}`}>
+        {children}
+      </h3>
+    );
 
-      const CardDescription = ({ children, className }) => (
-        <p className={`text-sm text-muted-foreground ${className}`}>
-          {children}
-        </p>
-      );
+    const CardDescription = ({ children, className }) => (
+      <p className={`text-sm text-muted-foreground ${className}`}>
+        {children}
+      </p>
+    );
 
-      const CardContent = ({ children, className }) => (
-        <div className={`p-6 pt-0 ${className}`}>
-          {children}
-        </div>
-      );
+    const CardContent = ({ children, className }) => (
+      <div className={`p-6 pt-0 ${className}`}>
+        {children}
+      </div>
+    );
 
-      const Button = ({ children, className, onClick, ...props }) => (
-        <button
-          className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 ${className}`}
-          onClick={onClick}
-          {...props}
-        >
-          {children}
-        </button>
-      );
+    const Button = ({ children, className, onClick, ...props }) => (
+      <button
+        className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 ${className}`}
+        onClick={onClick}
+        {...props}
+      >
+        {children}
+      </button>
+    );
 
-      const Input = ({ className, type, value, onChange, disabled, ...props }) => (
-        <input
-          type={type}
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-          {...props}
-        />
-      );
+    const Input = ({ className, type, value, onChange, disabled, ...props }) => (
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        {...props}
+      />
+    );
 
-      const Label = ({ children, className, htmlFor }) => (
-        <label
-          htmlFor={htmlFor}
-          className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}
-        >
-          {children}
-        </label>
-      );
+    const Label = ({ children, className, htmlFor }) => (
+      <label
+        htmlFor={htmlFor}
+        className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${className}`}
+      >
+        {children}
+      </label>
+    );
 
-      const Tabs = ({ children, defaultValue }) => {
-        const [activeTab, setActiveTab] = useState(defaultValue);
-        return (
-          <div className="flex flex-col">
-            {React.Children.map(children, child =>
-              React.cloneElement(child, { activeTab, setActiveTab })
-            )}
-          </div>
-        );
-      };
-
-      const TabsList = ({ children, className, activeTab, setActiveTab }) => (
-        <div className={`inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground ${className}`}>
+    const Tabs = ({ children, defaultValue }) => {
+      const [activeTab, setActiveTab] = useState(defaultValue);
+      return (
+        <div className="flex flex-col">
           {React.Children.map(children, child =>
             React.cloneElement(child, { activeTab, setActiveTab })
           )}
         </div>
       );
+    };
 
-      const TabsTrigger = ({ children, value, className, activeTab, setActiveTab }) => (
-        <button
-          className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
-            activeTab === value ? 'bg-background text-foreground shadow' : ''
-          } ${className}`}
-          onClick={() => setActiveTab(value)}
-        >
-          {children}
-        </button>
-      );
+    const TabsList = ({ children, className, activeTab, setActiveTab }) => (
+      <div className={`inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground ${className}`}>
+        {React.Children.map(children, child =>
+          React.cloneElement(child, { activeTab, setActiveTab })
+        )}
+      </div>
+    );
 
-      const TabsContent = ({ children, value, className, activeTab }) => (
-        <div className={`mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-          activeTab === value ? '' : 'hidden'
-        } ${className}`}>
-          {children}
-        </div>
-      );
+    const TabsTrigger = ({ children, value, className, activeTab, setActiveTab }) => (
+      <button
+        className={`inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
+          activeTab === value ? 'bg-background text-foreground shadow' : ''
+        } ${className}`}
+        onClick={() => setActiveTab(value)}
+      >
+        {children}
+      </button>
+    );
 
-      // O componente App é o container principal da nossa aplicação
-      const App = () => {
-        // Dados iniciais consolidados. Julho agora é 'Projetado'.
-        const initialCombinedData = [
-          { month: 'Jan', prom: 973, neutr: 52, detra: 40, status: 'Fechado' },
-          { month: 'Fev', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
-          { month: 'Mar', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
-          { month: 'Abr', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
-          { month: 'Mai', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
-          { month: 'Jun', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
-          { month: 'Jul', prom: 990, neutr: 26, detra: 13, status: 'Projetado' }
-        ];
+    const TabsContent = ({ children, value, className, activeTab }) => (
+      <div className={`mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+        activeTab === value ? '' : 'hidden'
+      } ${className}`}>
+        {children}
+      </div>
+    );
 
-        const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        
-        // Projeção automática para meses não preenchidos
-        const initialProjectionData = useMemo(() => {
-          const lastFourMonths = initialCombinedData.filter(d => d.status === 'Fechado').slice(-4);
-          const avgData = lastFourMonths.reduce((acc, curr) => {
-            acc.prom += curr.prom;
-            acc.neutr += curr.neutr;
-            acc.detra += curr.detra;
-            return acc;
-          }, { prom: 0, neutr: 0, detra: 0 });
-        
-          const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
-          const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
-          const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
-        
-          const fullData = [...initialCombinedData];
-          for (let i = initialCombinedData.length; i < allMonths.length; i++) {
-            fullData.push({
-              month: allMonths[i],
-              prom: avgProm,
-              neutr: avgNeutr,
-              detra: avgDetra,
-              status: 'Projetado',
-            });
-          }
-          return fullData;
-        }, []);
-        
-        const [data, setData] = useState(initialProjectionData);
-        const [totalNotas, setTotalNotas] = useState(1000);
-        const [inverseResults, setInverseResults] = useState([]);
-        const [annualGoalResult, setAnnualGoalResult] = useState(null);
-        const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000);
+    const App = () => {
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [userId, setUserId] = useState(null);
+      const [db, setDb] = useState(null);
+      const [totalNotas, setTotalNotas] = useState(1000);
+      const [inverseResults, setInverseResults] = useState([]);
+      const [annualGoalResult, setAnnualGoalResult] = useState(null);
+      const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000);
 
-        const calculateNps = (promoters, detractors, total) => {
-          if (total === 0) return 0;
-          return parseFloat(((promoters - detractors) / total) * 100).toFixed(1);
-        };
-        
-        const npsProjectionData = useMemo(() => {
-          return data.map(monthData => {
-            const totalVolume = monthData.prom + monthData.neutr + monthData.detra;
-            const npsCx = calculateNps(monthData.prom, monthData.detra, totalVolume);
-            return {
-              ...monthData,
-              totalVolume,
-              npsCx
+      // Dados iniciais baseados na imagem fornecida pelo usuário
+      const initialStaticData = [
+        { month: 'jan.25', prom: 990, neutr: 26, detra: 13, status: 'Fechado' },
+        { month: 'fev.25', prom: 975, neutr: 38, detra: 26, status: 'Fechado' },
+        { month: 'mar.25', prom: 1412, neutr: 48, detra: 44, status: 'Fechado' },
+        { month: 'abr.25', prom: 1396, neutr: 62, detra: 47, status: 'Fechado' },
+        { month: 'mai.25', prom: 1243, neutr: 86, detra: 51, status: 'Fechado' },
+        { month: 'jun.25', prom: 1334, neutr: 61, detra: 28, status: 'Fechado' },
+        { month: 'jul.25', prom: 973, neutr: 52, detra: 40, status: 'Fechado' },
+      ];
+      const allMonths = ['jan.25', 'fev.25', 'mar.25', 'abr.25', 'mai.25', 'jun.25', 'jul.25', 'ago.25', 'set.25', 'out.25', 'nov.25', 'dez.25'];
+
+      // Efeito para inicializar o Firebase e o listener do Firestore
+      useEffect(() => {
+        // Assegura que o script do Firebase foi carregado
+        if (window.firebase) {
+          const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore, collection, onSnapshot, setDoc, doc, getDocs } = window.firebase;
+
+          try {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = JSON.parse(__firebase_config);
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            
+            const app = initializeApp(firebaseConfig);
+            const firestoreDb = getFirestore(app);
+            const auth = getAuth(app);
+            setDb(firestoreDb);
+
+            const signIn = async () => {
+              if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+              } else {
+                await signInAnonymously(auth);
+              }
             };
-          });
-        }, [data]);
+            signIn();
 
-        const annualTotals = useMemo(() => {
-          const totalProm = npsProjectionData.reduce((sum, d) => sum + d.prom, 0);
-          const totalNeutr = npsProjectionData.reduce((sum, d) => sum + d.neutr, 0);
-          const totalDetra = npsProjectionData.reduce((sum, d) => sum + d.detra, 0);
-          const totalVolume = totalProm + totalNeutr + totalDetra;
-          const annualNps = calculateNps(totalProm, totalDetra, totalVolume);
-          return { totalProm, totalNeutr, totalDetra, totalVolume, annualNps };
-        }, [npsProjectionData]);
-        
-        const neutralPerDetractor = useMemo(() => {
-          const closedData = initialCombinedData.filter(d => d.status === 'Fechado');
-          const totalNeutrosFechado = closedData.reduce((sum, d) => sum + d.neutr, 0);
-          const totalDetratoresFechado = closedData.reduce((sum, d) => sum + d.detra, 0);
-          return totalDetratoresFechado > 0 ? parseFloat(totalNeutrosFechado / totalDetratoresFechado).toFixed(1) : 0;
-        }, []);
-        
-        // Agora, esta função é mais simples e não precisa verificar o status,
-        // pois a propriedade `disabled` do input já o faz.
-        const handleProjectionChange = (index, type, value) => {
-          const newData = [...data];
-          newData[index][type] = parseInt(value, 10) || 0;
-          setData(newData);
-        };
+            onAuthStateChanged(auth, async (user) => {
+              if (user) {
+                const currentUserId = user.uid;
+                setUserId(currentUserId);
+                
+                const collectionPath = `/artifacts/${appId}/users/${currentUserId}/nps-projections`;
+                
+                // Listener em tempo real para a coleção
+                const unsubscribe = onSnapshot(collection(firestoreDb, collectionPath), async (querySnapshot) => {
+                  const fetchedData = querySnapshot.docs.map(d => ({ month: d.id, ...d.data() }));
+                  
+                  if (querySnapshot.empty) {
+                      // Coleção vazia, preenche com os dados iniciais
+                      const lastClosedData = initialStaticData[initialStaticData.length - 1];
+                      const closedMonths = initialStaticData.filter(d => d.status === 'Fechado');
+                      
+                      // Insere todos os meses fechados
+                      for (const monthData of closedMonths) {
+                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
+                          await setDoc(docRef, monthData);
+                      }
 
-        // Função de alteração de status, agora sem desabilitar o select e sem resetar os valores.
-        const handleStatusChange = (index, newStatus) => {
-          const newData = [...data];
-          newData[index].status = newStatus;
+                      // Calcula a média dos últimos 4 meses fechados para projeção
+                      const lastFourMonths = closedMonths.slice(-4);
+                      const avgData = lastFourMonths.reduce((acc, curr) => {
+                          acc.prom += curr.prom;
+                          acc.neutr += curr.neutr;
+                          acc.detra += curr.detra;
+                          return acc;
+                      }, { prom: 0, neutr: 0, detra: 0 });
+                      const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
+                      const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
+                      const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
 
-          // Se o status for alterado para 'Projetado', preenche com a projeção
-          // Se for alterado para 'Fechado', os inputs ficam desabilitados, mas os valores são mantidos.
-          if (newStatus === 'Projetado') {
-             const lastFourMonths = newData.slice(0, index).filter(d => d.status === 'Fechado').slice(-4);
-            const avgData = lastFourMonths.reduce((acc, curr) => {
-              acc.prom += curr.prom;
-              acc.neutr += curr.neutr;
-              acc.detra += curr.detra;
-              return acc;
-            }, { prom: 0, neutr: 0, detra: 0 });
+                      // Preenche os meses restantes como 'Projetado'
+                      const startIndex = allMonths.indexOf(lastClosedData.month) + 1;
+                      for (let i = startIndex; i < allMonths.length; i++) {
+                          const monthData = {
+                              month: allMonths[i],
+                              prom: avgProm,
+                              neutr: avgNeutr,
+                              detra: avgDetra,
+                              status: 'Projetado'
+                          };
+                          const docRef = doc(firestoreDb, collectionPath, monthData.month);
+                          await setDoc(docRef, monthData);
+                      }
+                  } else {
+                      // Ordena os dados antes de atualizar o estado
+                      const orderedData = allMonths.map(month => {
+                          const existingMonth = fetchedData.find(d => d.month === month);
+                          return existingMonth || { month: month, prom: 0, neutr: 0, detra: 0, status: 'Projetado' };
+                      });
+                      setData(orderedData);
+                  }
+                  setLoading(false);
+                }, (error) => {
+                  console.error("Erro ao ouvir a coleção do Firestore:", error);
+                });
 
-            const avgProm = lastFourMonths.length > 0 ? Math.round(avgData.prom / lastFourMonths.length) : 0;
-            const avgNeutr = lastFourMonths.length > 0 ? Math.round(avgData.neutr / lastFourMonths.length) : 0;
-            const avgDetra = lastFourMonths.length > 0 ? Math.round(avgData.detra / lastFourMonths.length) : 0;
-
-            newData[index].prom = avgProm;
-            newData[index].neutr = avgNeutr;
-            newData[index].detra = avgDetra;
-          }
-
-          setData(newData);
-        };
-        
-        const handleInverseCalculation = () => {
-          const targetNps = 95;
-          const results = [];
-          
-          const closedData = data.filter(d => d.status === 'Fechado');
-          const initialTotalNotes = closedData.reduce((sum, d) => sum + d.prom + d.neutr + d.detra, 0);
-          const initialTotalNeutrals = closedData.reduce((sum, d) => sum + d.neutr, 0);
-          const neutralRatio = initialTotalNeutrals / initialTotalNotes;
-        
-          for (let i = 0; i < 12; i++) {
-            const notes = totalNotas;
-            const neutrals = Math.round(notes * neutralRatio);
-            const equation1 = (targetNps / 100) * notes;
-            const equation2 = notes - neutrals;
-            const promoters = Math.round((equation1 + equation2) / 2);
-            const detractors = Math.round((equation2 - equation1) / 2);
-        
-            results.push({
-              month: allMonths[i],
-              totalNotas: notes,
-              promotores: promoters,
-              detratores: detractors,
-              neutros: neutrals,
-              npsCalculado: calculateNps(promoters, detractors, notes),
+                return () => unsubscribe(); // Limpeza do listener
+              } else {
+                setLoading(false);
+              }
             });
+          } catch (e) {
+            console.error("Erro ao inicializar o Firebase:", e);
+            setLoading(false);
           }
-          setInverseResults(results);
-        };
-        
-        const handleAnnualGoalCalculation = () => {
-          const monthsPast = data.filter(d => d.status === 'Fechado').length;
-          const monthsToProject = allMonths.length - monthsPast;
-          const annualTargetNps = 95;
-        
-          const pastMetrics = data.filter(d => d.status === 'Fechado').reduce((acc, curr) => {
-            acc.totalVolume += curr.prom + curr.neutr + curr.detra;
-            acc.totalPromoters += curr.prom;
-            acc.totalNeutrals += curr.neutr;
-            acc.totalDetractors += curr.detra;
-            return acc;
-          }, { totalVolume: 0, totalPromoters: 0, totalNeutrals: 0, totalDetractors: 0 });
-        
-          const projectedTotalAnnualVolume = pastMetrics.totalVolume + (monthsToProject * projectedTotalNotes);
-          const currentNps = calculateNps(pastMetrics.totalPromoters, pastMetrics.totalDetractors, pastMetrics.totalVolume);
-          const neutralRatio = pastMetrics.totalNeutrals / pastMetrics.totalVolume;
-          
-          const targetPromotersDetractorsSum = projectedTotalAnnualVolume - (projectedTotalAnnualVolume * neutralRatio);
-          const targetPromotersDetractorsDiff = (annualTargetNps / 100) * projectedTotalAnnualVolume;
-          
-          const totalPromotersNeeded = Math.round((targetPromotersDetractorsSum + targetPromotersDetractorsDiff) / 2);
-          const totalDetractorsNeeded = Math.round((targetPromotersDetractorsSum - targetPromotersDetractorsDiff) / 2);
-          const totalNeutralsNeeded = Math.round(projectedTotalAnnualVolume * neutralRatio);
-          
-          const remainingPromotersNeeded = totalPromotersNeeded - pastMetrics.totalPromoters;
-          const remainingDetractorsNeeded = totalDetractorsNeeded - pastMetrics.totalDetractors;
-          const remainingNeutralsNeeded = totalNeutralsNeeded - pastMetrics.totalNeutrals;
-        
-          let isAchievable = true;
-          let maxNps = 0;
-          
-          if (remainingPromotersNeeded < 0 || remainingDetractorsNeeded < 0 || remainingNeutralsNeeded < 0) {
-            isAchievable = false;
-            const maxPossiblePromoters = pastMetrics.totalPromoters + (monthsToProject * (projectedTotalNotes - Math.round(projectedTotalNotes * neutralRatio)));
-            const maxPossibleDetractors = pastMetrics.totalDetractors;
-            maxNps = calculateNps(maxPossiblePromoters, maxPossibleDetractors, projectedTotalAnnualVolume);
-          }
-          
-          setAnnualGoalResult({
-            isAchievable,
-            currentNps,
-            projectedTotalAnnualVolume,
-            targetNps: annualTargetNps,
-            maxNps,
-            monthlyPromoters: isAchievable ? Math.round(remainingPromotersNeeded / monthsToProject) : 'N/A',
-            monthlyDetractors: isAchievable ? Math.round(remainingDetractorsNeeded / monthsToProject) : 'N/A',
-            monthlyNeutrals: isAchievable ? Math.round(remainingNeutralsNeeded / monthsToProject) : 'N/A',
-          });
-        };
-        
+        }
+      }, []);
 
+      // Função para salvar dados no Firestore
+      const saveToFirestore = async (month, newData) => {
+        if (!db || !userId) {
+          console.error("Banco de dados ou ID de usuário não disponíveis.");
+          return;
+        }
+        
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const docRef = window.firebase.doc(db, `/artifacts/${appId}/users/${userId}/nps-projections`, month);
+          await window.firebase.setDoc(docRef, newData, { merge: true });
+        } catch (e) {
+          console.error("Erro ao salvar no Firestore:", e);
+        }
+      };
+
+      const calculateNps = (promoters, detractors, total) => {
+        if (total === 0) return 0;
+        return parseFloat(((promoters - detractors) / total) * 100).toFixed(1);
+      };
+      
+      const npsProjectionData = useMemo(() => {
+        if (loading) return [];
+        return data.map(monthData => {
+          const totalVolume = monthData.prom + monthData.neutr + monthData.detra;
+          const npsCx = calculateNps(monthData.prom, monthData.detra, totalVolume);
+          return {
+            ...monthData,
+            totalVolume,
+            npsCx
+          };
+        });
+      }, [data, loading]);
+
+      const annualTotals = useMemo(() => {
+        const totalProm = npsProjectionData.reduce((sum, d) => sum + d.prom, 0);
+        const totalNeutr = npsProjectionData.reduce((sum, d) => sum + d.neutr, 0);
+        const totalDetra = npsProjectionData.reduce((sum, d) => sum + d.detra, 0);
+        const totalVolume = totalProm + totalNeutr + totalDetra;
+        const annualNps = calculateNps(totalProm, totalDetra, totalVolume);
+        return { totalProm, totalNeutr, totalDetra, totalVolume, annualNps };
+      }, [npsProjectionData]);
+      
+      const neutralPerDetractor = useMemo(() => {
+        const closedData = data.filter(d => d.status === 'Fechado');
+        const totalNeutrosFechado = closedData.reduce((sum, d) => sum + d.neutr, 0);
+        const totalDetratoresFechado = closedData.reduce((sum, d) => sum + d.detra, 0);
+        return totalDetratoresFechado > 0 ? parseFloat(totalNeutrosFechado / totalDetratoresFechado).toFixed(1) : 0;
+      }, [data]);
+      
+      const handleProjectionChange = (index, type, value) => {
+        const newValue = parseInt(value, 10) || 0;
+        const newData = [...data];
+        newData[index][type] = newValue;
+        setData(newData);
+        saveToFirestore(newData[index].month, newData[index]);
+      };
+
+      const handleStatusChange = (index, newStatus) => {
+        const newData = [...data];
+        newData[index].status = newStatus;
+        setData(newData);
+        saveToFirestore(newData[index].month, newData[index]);
+      };
+      
+      const handleInverseCalculation = () => {
+        const targetNps = 95;
+        const results = [];
+        const closedData = data.filter(d => d.status === 'Fechado');
+        const initialTotalNotes = closedData.reduce((sum, d) => sum + d.prom + d.neutr + d.detra, 0);
+        const initialTotalNeutrals = closedData.reduce((sum, d) => sum + d.neutr, 0);
+        const neutralRatio = initialTotalNeutrals > 0 && initialTotalNotes > 0 ? initialTotalNeutrals / initialTotalNotes : 0.05;
+        
+        for (let i = 0; i < 12; i++) {
+          const notes = totalNotas;
+          const neutrals = Math.round(notes * neutralRatio);
+          const equation1 = (targetNps / 100) * notes;
+          const equation2 = notes - neutrals;
+          const promoters = Math.round((equation1 + equation2) / 2);
+          const detractors = Math.round((equation2 - equation1) / 2);
+      
+          results.push({
+            month: allMonths[i],
+            totalNotas: notes,
+            promotores: promoters,
+            detratores: detractors,
+            neutros: neutrals,
+            npsCalculado: calculateNps(promoters, detractors, notes),
+          });
+        }
+        setInverseResults(results);
+      };
+      
+      const handleAnnualGoalCalculation = () => {
+        const monthsPast = data.filter(d => d.status === 'Fechado').length;
+        const monthsToProject = allMonths.length - monthsPast;
+        const annualTargetNps = 95;
+      
+        const pastMetrics = data.filter(d => d.status === 'Fechado').reduce((acc, curr) => {
+          acc.totalVolume += curr.prom + curr.neutr + curr.detra;
+          acc.totalPromoters += curr.prom;
+          acc.totalNeutrals += curr.neutr;
+          acc.totalDetractors += curr.detra;
+          return acc;
+        }, { totalVolume: 0, totalPromoters: 0, totalNeutrals: 0, totalDetractors: 0 });
+      
+        const projectedTotalAnnualVolume = pastMetrics.totalVolume + (monthsToProject * projectedTotalNotes);
+        const currentNps = calculateNps(pastMetrics.totalPromoters, pastMetrics.totalDetractors, pastMetrics.totalVolume);
+        const neutralRatio = pastMetrics.totalNeutrals > 0 && pastMetrics.totalVolume > 0 ? pastMetrics.totalNeutrals / pastMetrics.totalVolume : 0.05;
+        
+        const targetPromotersDetractorsSum = projectedTotalAnnualVolume - (projectedTotalAnnualVolume * neutralRatio);
+        const targetPromotersDetractorsDiff = (annualTargetNps / 100) * projectedTotalAnnualVolume;
+        
+        const totalPromotersNeeded = Math.round((targetPromotersDetractorsSum + targetPromotersDetractorsDiff) / 2);
+        const totalDetractorsNeeded = Math.round((targetPromotersDetractorsSum - targetPromotersDetractorsDiff) / 2);
+        const totalNeutralsNeeded = Math.round(projectedTotalAnnualVolume * neutralRatio);
+        
+        const remainingPromotersNeeded = totalPromotersNeeded - pastMetrics.totalPromoters;
+        const remainingDetractorsNeeded = totalDetractorsNeeded - pastMetrics.totalDetractors;
+        const remainingNeutralsNeeded = totalNeutralsNeeded - pastMetrics.totalNeutrals;
+      
+        let isAchievable = true;
+        let maxNps = 0;
+        
+        if (remainingPromotersNeeded < 0 || remainingDetractorsNeeded < 0 || remainingNeutralsNeeded < 0) {
+          isAchievable = false;
+          const maxPossiblePromoters = pastMetrics.totalPromoters + (monthsToProject * (projectedTotalNotes - Math.round(projectedTotalNotes * neutralRatio)));
+          const maxPossibleDetractors = pastMetrics.totalDetractors;
+          maxNps = calculateNps(maxPossiblePromoters, maxPossibleDetractors, projectedTotalAnnualVolume);
+        }
+        
+        setAnnualGoalResult({
+          isAchievable,
+          currentNps,
+          projectedTotalAnnualVolume,
+          targetNps: annualTargetNps,
+          maxNps,
+          monthlyPromoters: isAchievable ? Math.round(remainingPromotersNeeded / monthsToProject) : 'N/A',
+          monthlyDetractors: isAchievable ? Math.round(remainingDetractorsNeeded / monthsToProject) : 'N/A',
+          monthlyNeutrals: isAchievable ? Math.round(remainingNeutralsNeeded / monthsToProject) : 'N/A',
+        });
+      };
+      
+      if (loading) {
         return (
-          <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-sans">
-            <Card className="max-w-7xl mx-auto rounded-xl shadow-lg">
-              <CardHeader className="bg-red-800 text-white rounded-t-xl p-6">
-                <CardTitle className="text-3xl font-bold">Simulador e Projeção de NPS</CardTitle>
-                <CardDescription className="text-red-100 text-lg">
-                  Ferramenta interativa para simular cenários e calcular metas de NPS.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <Tabs defaultValue="projection">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="projection">Projeção de NPS</TabsTrigger>
-                    <TabsTrigger value="inverse">Cálculo Inverso (Meta NPS 95)</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="projection" className="mt-4">
-                    <h3 className="text-2xl font-semibold mb-4 text-gray-800">Projeção de NPS CX Consolidado</h3>
-                    <p className="text-gray-600 mb-6">
-                      Ajuste os volumes de promotores, detratores e neutros para a visão consolidada de todos os canais e veja a projeção do NPS CX.
-                    </p>
-                    <div className="overflow-x-auto mb-6">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-red-700 text-white">
-                            <th className="p-3 border-r">Mês</th>
-                            <th className="p-3 border-r">Status</th>
-                            <th className="p-3">Promotores</th>
-                            <th className="p-3">Neutros
-                              <span className="block text-xs font-normal text-red-100 mt-1">
-                                (1 Detrator ≈ {neutralPerDetractor} Neutros)
-                              </span>
-                            </th>
-                            <th className="p-3">Detratores</th>
-                            <th className="p-3">Vol. Total</th>
-                            <th className="p-3">NPS CX</th>
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-xl font-medium text-gray-700">Carregando dados...</div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-sans">
+          {userId && (
+            <div className="mb-4 p-2 text-center text-sm text-gray-600 bg-gray-200 rounded-lg shadow-sm">
+              ID do Usuário: <span className="font-mono text-gray-800">{userId}</span>
+            </div>
+          )}
+          <Card className="max-w-7xl mx-auto rounded-xl shadow-lg">
+            <CardHeader className="bg-red-800 text-white rounded-t-xl p-6">
+              <CardTitle className="text-3xl font-bold">Simulador e Projeção de NPS</CardTitle>
+              <CardDescription className="text-red-100 text-lg">
+                Ferramenta interativa para simular cenários e calcular metas de NPS.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <Tabs defaultValue="projection">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="projection">Projeção de NPS</TabsTrigger>
+                  <TabsTrigger value="inverse">Cálculo Inverso (Meta NPS 95)</TabsTrigger>
+                </TabsList>
+                <TabsContent value="projection" className="mt-4">
+                  <h3 className="text-2xl font-semibold mb-4 text-gray-800">Projeção de NPS CX Consolidado</h3>
+                  <p className="text-gray-600 mb-6">
+                    Ajuste os volumes de promotores, detratores e neutros para a visão consolidada de todos os canais e veja a projeção do NPS CX.
+                  </p>
+                  <div className="overflow-x-auto mb-6">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-red-700 text-white">
+                          <th className="p-3 border-r">Mês</th>
+                          <th className="p-3 border-r">Status</th>
+                          <th className="p-3">Promotores</th>
+                          <th className="p-3">Neutros
+                            <span className="block text-xs font-normal text-red-100 mt-1">
+                              (1 Detrator ≈ {neutralPerDetractor} Neutros)
+                            </span>
+                          </th>
+                          <th className="p-3">Detratores</th>
+                          <th className="p-3">Vol. Total</th>
+                          <th className="p-3">NPS CX</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {npsProjectionData.map((monthData, index) => (
+                          <tr key={index} className={`border-b ${monthData.status === 'Projetado' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                            <td className="p-3 font-medium border-r">{monthData.month}</td>
+                            <td className="p-3 border-r text-sm text-center">
+                              <select
+                                value={monthData.status}
+                                onChange={(e) => handleStatusChange(index, e.target.value)}
+                                className={`block w-full rounded-md border border-gray-300 p-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500
+                                ${monthData.status === 'Fechado' ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-900'}`}
+                              >
+                                <option value="Fechado">Fechado</option>
+                                <option value="Projetado">Projetado</option>
+                              </select>
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="number"
+                                value={monthData.prom}
+                                onChange={(e) => handleProjectionChange(index, 'prom', e.target.value)}
+                                className="w-full text-center"
+                                disabled={monthData.status === 'Fechado'}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="number"
+                                value={monthData.neutr}
+                                onChange={(e) => handleProjectionChange(index, 'neutr', e.target.value)}
+                                className="w-full text-center"
+                                disabled={monthData.status === 'Fechado'}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="number"
+                                value={monthData.detra}
+                                onChange={(e) => handleProjectionChange(index, 'detra', e.target.value)}
+                                className="w-full text-center"
+                                disabled={monthData.status === 'Fechado'}
+                              />
+                            </td>
+                            <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
+                            <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {npsProjectionData.map((monthData, index) => (
-                            <tr key={index} className={`border-b ${monthData.status === 'Projetado' ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                              <td className="p-3 font-medium border-r">{monthData.month}</td>
-                              <td className="p-3 border-r text-sm text-center">
-                                <select
-                                  value={monthData.status}
-                                  onChange={(e) => handleStatusChange(index, e.target.value)}
-                                  className={`block w-full rounded-md border border-gray-300 p-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-red-500
-                                  ${monthData.status === 'Fechado' ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-900'}`}
-                                >
-                                  <option value="Fechado">Fechado</option>
-                                  <option value="Projetado">Projetado</option>
-                                </select>
-                              </td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.prom}
-                                  onChange={(e) => handleProjectionChange(index, 'prom', e.target.value)}
-                                  className="w-full text-center"
-                                  disabled={monthData.status === 'Fechado'}
-                                />
-                              </td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.neutr}
-                                  onChange={(e) => handleProjectionChange(index, 'neutr', e.target.value)}
-                                  className="w-full text-center"
-                                  disabled={monthData.status === 'Fechado'}
-                                />
-                              </td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.detra}
-                                  onChange={(e) => handleProjectionChange(index, 'detra', e.target.value)}
-                                  className="w-full text-center"
-                                  disabled={monthData.status === 'Fechado'}
-                                />
-                              </td>
-                              <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
-                              <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
-                            </tr>
-                          ))}
-                          {/* Linha de Subtotal Anual */}
-                          <tr className="border-b bg-red-800 text-white font-bold text-lg">
-                            <td className="p-3 border-r" colSpan="2">Subtotal Anual</td>
-                            <td className="p-3 text-center">{annualTotals.totalProm}</td>
-                            <td className="p-3 text-center">{annualTotals.totalNeutr}</td>
-                            <td className="p-3 text-center">{annualTotals.totalDetra}</td>
-                            <td className="p-3 text-center">{annualTotals.totalVolume}</td>
-                            <td className="p-3 text-center">{annualTotals.annualNps}%</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                        ))}
+                        <tr className="border-b bg-red-800 text-white font-bold text-lg">
+                          <td className="p-3 border-r" colSpan="2">Subtotal Anual</td>
+                          <td className="p-3 text-center">{annualTotals.totalProm}</td>
+                          <td className="p-3 text-center">{annualTotals.totalNeutr}</td>
+                          <td className="p-3 text-center">{annualTotals.totalDetra}</td>
+                          <td className="p-3 text-center">{annualTotals.totalVolume}</td>
+                          <td className="p-3 text-center">{annualTotals.annualNps}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <Card className="bg-blue-50 border-blue-200 mt-8">
+                    <CardHeader>
+                      <CardTitle className="text-xl">Análise de Meta Anual (NPS 95)</CardTitle>
+                      <CardDescription>
+                        Com base no volume projetado, veja a distribuição necessária para atingir a meta de NPS 95 para o ano.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <div className="flex items-end space-x-4 mb-4">
+                        <div className="flex-grow">
+                          <Label htmlFor="projected-total-notes" className="text-base">Volume de Notas Projetado por Mês</Label>
+                          <Input
+                            id="projected-total-notes"
+                            type="number"
+                            value={projectedTotalNotes}
+                            onChange={(e) => setProjectedTotalNotes(parseInt(e.target.value, 10) || 0)}
+                            className="mt-2 text-center"
+                          />
+                        </div>
+                        <Button onClick={handleAnnualGoalCalculation} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
+                          Calcular Meta Anual
+                        </Button>
+                      </div>
+                      {annualGoalResult && (
+                        <div className="mt-4">
+                          <p className="text-lg font-semibold">Resumo do Ano:</p>
+                          <ul className="list-disc list-inside space-y-1 mt-2 text-gray-700">
+                            <li>NPS Acumulado até o momento: <span className="font-bold text-blue-800">{annualGoalResult.currentNps}%</span></li>
+                            <li>Volume Total Anual Projetado: <span className="font-bold">{annualGoalResult.projectedTotalAnnualVolume}</span> notas</li>
+                          </ul>
+                          {annualGoalResult.isAchievable ? (
+                            <div className="mt-4 p-4 rounded-lg bg-green-100 text-green-800 border border-green-300">
+                              <p className="font-bold text-xl">A meta anual de NPS 95% é alcançável!</p>
+                              <p className="mt-2">Para alcançar a meta, a distribuição mensal necessária é:</p>
+                              <ul className="mt-2 list-disc list-inside font-medium">
+                                <li>Promotores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyPromoters}</span></li>
+                                <li>Neutros por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyNeutrals}</span></li>
+                                <li>Detratores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyDetractors}</span></li>
+                              </ul>
+                            </div>
+                          ) : (
+                            <div className="mt-4 p-4 rounded-lg bg-red-100 text-red-800 border border-red-300">
+                              <p className="font-bold text-xl">Aviso: A meta anual de NPS 95% é inatingível.</p>
+                              <p className="mt-2">O NPS máximo que você pode atingir com o volume de notas projetado é: <span className="font-bold text-red-900">{annualGoalResult.maxNps}%</span>.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="bg-red-50 border-red-200 mt-8">
+                    <CardHeader>
+                      <CardTitle className="text-xl">Gráfico de Projeção do NPS CX</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={npsProjectionData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="month" />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip />
+                          <Legend />
+                          <Line type="monotone" dataKey="npsCx" name="NPS CX Projetado" stroke="#a51f38" strokeWidth={2} activeDot={{ r: 8 }} animationDuration={1500} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                      <div className="mt-4 text-center">
+                        <p className="text-xl font-bold text-gray-800">
+                          NPS CX Final Projetado: <span className="text-red-800">{npsProjectionData[npsProjectionData.length - 1]?.npsCx}%</span>
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+                <TabsContent value="inverse" className="mt-4">
+                  <h3 className="text-2xl font-semibold mb-4 text-gray-800">Cálculo Inverso (Meta de NPS 95)</h3>
+                  <p className="text-gray-600 mb-6">
+                    Informe o volume total de notas que você espera obter por mês para ver a distribuição necessária para alcançar um NPS de 95.
+                  </p>
+                  <div className="flex items-end space-x-4 mb-6 p-4 bg-gray-50 border rounded-lg">
+                    <div className="flex-grow">
+                      <Label htmlFor="total-notas" className="text-base">Volume Total de Notas por Mês</Label>
+                      <Input
+                        id="total-notas"
+                        type="number"
+                        value={totalNotas}
+                        onChange={(e) => setTotalNotas(parseInt(e.target.value, 10) || 0)}
+                        className="mt-2 text-center"
+                      />
                     </div>
-                    
-                    <Card className="bg-blue-50 border-blue-200 mt-8">
+                    <Button onClick={handleInverseCalculation} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
+                      Calcular Meta Mensal
+                    </Button>
+                  </div>
+                  {inverseResults.length > 0 && (
+                    <Card className="bg-green-50 border-green-200">
                       <CardHeader>
-                        <CardTitle className="text-xl">Análise de Meta Anual (NPS 95)</CardTitle>
+                        <CardTitle className="text-xl">Resultados para a Meta de NPS 95</CardTitle>
                         <CardDescription>
-                          Com base no volume projetado, veja a distribuição necessária para atingir a meta de NPS 95 para o ano.
+                          A meta é um NPS de 95. Os valores abaixo indicam a distribuição necessária de feedback.
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                         <div className="flex items-end space-x-4 mb-4">
-                          <div className="flex-grow">
-                            <Label htmlFor="projected-total-notes" className="text-base">Volume de Notas Projetado por Mês</Label>
-                            <Input
-                              id="projected-total-notes"
-                              type="number"
-                              value={projectedTotalNotes}
-                              onChange={(e) => setProjectedTotalNotes(parseInt(e.target.value, 10) || 0)}
-                              className="mt-2 text-center"
-                            />
-                          </div>
-                          <Button onClick={handleAnnualGoalCalculation} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
-                            Calcular Meta Anual
-                          </Button>
-                        </div>
-                        {annualGoalResult && (
-                          <div className="mt-4">
-                            <p className="text-lg font-semibold">Resumo do Ano:</p>
-                            <ul className="list-disc list-inside space-y-1 mt-2 text-gray-700">
-                              <li>NPS Acumulado até o momento: <span className="font-bold text-blue-800">{annualGoalResult.currentNps}%</span></li>
-                              <li>Volume Total Anual Projetado: <span className="font-bold">{annualGoalResult.projectedTotalAnnualVolume}</span> notas</li>
-                            </ul>
-                            {annualGoalResult.isAchievable ? (
-                              <div className="mt-4 p-4 rounded-lg bg-green-100 text-green-800 border border-green-300">
-                                <p className="font-bold text-xl">A meta anual de NPS 95% é alcançável!</p>
-                                <p className="mt-2">Para alcançar a meta, a distribuição mensal necessária é:</p>
-                                <ul className="mt-2 list-disc list-inside font-medium">
-                                  <li>Promotores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyPromoters}</span></li>
-                                  <li>Neutros por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyNeutrals}</span></li>
-                                  <li>Detratores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyDetractors}</span></li>
-                                </ul>
-                              </div>
-                            ) : (
-                              <div className="mt-4 p-4 rounded-lg bg-red-100 text-red-800 border border-red-300">
-                                <p className="font-bold text-xl">Aviso: A meta anual de NPS 95% é inatingível.</p>
-                                <p className="mt-2">O NPS máximo que você pode atingir com o volume de notas projetado é: <span className="font-bold text-red-900">{annualGoalResult.maxNps}%</span>.</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                    
-                    <Card className="bg-red-50 border-red-200 mt-8">
-                      <CardHeader>
-                        <CardTitle className="text-xl">Gráfico de Projeção do NPS CX</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <LineChart data={npsProjectionData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis dataKey="month" />
-                            <YAxis domain={[0, 100]} />
-                            <Tooltip />
-                            <Legend />
-                            <Line type="monotone" dataKey="npsCx" name="NPS CX Projetado" stroke="#a51f38" strokeWidth={2} activeDot={{ r: 8 }} animationDuration={1500} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                        <div className="mt-4 text-center">
-                          <p className="text-xl font-bold text-gray-800">
-                            NPS CX Final Projetado: <span className="text-red-800">{npsProjectionData[npsProjectionData.length - 1]?.npsCx}%</span>
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                  <TabsContent value="inverse" className="mt-4">
-                    <h3 className="text-2xl font-semibold mb-4 text-gray-800">Cálculo Inverso (Meta de NPS 95)</h3>
-                    <p className="text-gray-600 mb-6">
-                      Informe o volume total de notas que você espera obter por mês para ver a distribuição necessária para alcançar um NPS de 95.
-                    </p>
-                    <div className="flex items-end space-x-4 mb-6 p-4 bg-gray-50 border rounded-lg">
-                      <div className="flex-grow">
-                        <Label htmlFor="total-notas" className="text-base">Volume Total de Notas por Mês</Label>
-                        <Input
-                          id="total-notas"
-                          type="number"
-                          value={totalNotas}
-                          onChange={(e) => setTotalNotas(parseInt(e.target.value, 10) || 0)}
-                          className="mt-2 text-center"
-                        />
-                      </div>
-                      <Button onClick={handleInverseCalculation} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
-                        Calcular Meta Mensal
-                      </Button>
-                    </div>
-                    {inverseResults.length > 0 && (
-                      <Card className="bg-green-50 border-green-200">
-                        <CardHeader>
-                          <CardTitle className="text-xl">Resultados para a Meta de NPS 95</CardTitle>
-                          <CardDescription>
-                            A meta é um NPS de 95. Os valores abaixo indicam a distribuição necessária de feedback.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="bg-green-500 text-white">
-                                  <th className="p-3">Mês</th>
-                                  <th className="p-3">Total Notas</th>
-                                  <th className="p-3">Promotores</th>
-                                  <th className="p-3">Detratores</th>
-                                  <th className="p-3">Neutros</th>
-                                  <th className="p-3">NPS Calculado</th>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-green-500 text-white">
+                                <th className="p-3">Mês</th>
+                                <th className="p-3">Total Notas</th>
+                                <th className="p-3">Promotores</th>
+                                <th className="p-3">Detratores</th>
+                                <th className="p-3">Neutros</th>
+                                <th className="p-3">NPS Calculado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {inverseResults.map((result, index) => (
+                                <tr key={index} className="border-b hover:bg-green-100">
+                                  <td className="p-3 font-medium">{result.month}</td>
+                                  <td className="p-3">{result.totalNotas}</td>
+                                  <td className="p-3">{result.promotores}</td>
+                                  <td className="p-3">{result.detratores}</td>
+                                  <td className="p-3">{result.neutros}</td>
+                                  <td className="p-3 font-bold">{result.npsCalculado}%</td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {inverseResults.map((result, index) => (
-                                  <tr key={index} className="border-b hover:bg-green-100">
-                                    <td className="p-3 font-medium">{result.month}</td>
-                                    <td className="p-3">{result.totalNotas}</td>
-                                    <td className="p-3">{result.promotores}</td>
-                                    <td className="p-3">{result.detratores}</td>
-                                    <td className="p-3">{result.neutros}</td>
-                                    <td className="p-3 font-bold">{result.npsCalculado}%</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      };
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    };
 
+    window.onload = function () {
       const rootElement = document.getElementById('root');
-      const root = ReactDOM.createRoot(rootElement);
-      root.render(<App />);
+      if (rootElement) {
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+      }
     };
   </script>
 </body>
