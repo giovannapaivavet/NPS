@@ -266,6 +266,7 @@
           }
         }, []);
 
+        // Função para salvar no Firestore
         const saveToFirestore = async (month, newData) => {
           if (!db || !userId) {
             console.error("Banco de dados ou ID de usuário não disponíveis.");
@@ -423,9 +424,9 @@
             monthlyNeutrals: isAchievable ? Math.round(remainingNeutralsNeeded / monthsToProject) : 'N/A',
           });
         };
-
-        const handleSave = (index) => {
-            const monthDataToSave = data[index];
+        
+        // Ação de salvar: agora recebe o objeto de dados completo da linha
+        const handleSave = (monthDataToSave) => {
             saveToFirestore(monthDataToSave.month, monthDataToSave);
         };
         
@@ -525,7 +526,8 @@
                               <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
                               <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
                               <td className="p-3">
-                                <Button onClick={() => handleSave(index)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
+                                {/* O botão agora passa o objeto `monthData` completo para a função `handleSave` */}
+                                <Button onClick={() => handleSave(monthData)} className="bg-red-500 hover:bg-red-600 text-white shadow-lg">
                                   Salvar
                                 </Button>
                               </td>
