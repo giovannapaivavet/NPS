@@ -141,178 +141,102 @@
 
       // O componente App é o container principal da nossa aplicação
       const App = () => {
-        // Dados iniciais com base na imagem fornecida, apenas até Julho
-        const initialData = [
-          {
-            month: 'Jan',
-            volVoz: 428, promVoz: 405, neutrVoz: 16, detraVoz: 7,
-            volWhats: 637, promWhats: 568, neutrWhats: 36, detraWhats: 33
-          },
-          {
-            month: 'Fev',
-            volVoz: 776, promVoz: 742, neutrVoz: 24, detraVoz: 10,
-            volWhats: 647, promWhats: 592, neutrWhats: 37, detraWhats: 18
-          },
-          {
-            month: 'Mar',
-            volVoz: 294, promVoz: 274, neutrVoz: 16, detraVoz: 4,
-            volWhats: 1086, promWhats: 969, neutrWhats: 70, detraWhats: 47
-          },
-          {
-            month: 'Abr',
-            volVoz: 584, promVoz: 561, neutrVoz: 21, detraVoz: 2,
-            volWhats: 921, promWhats: 835, neutrWhats: 41, detraWhats: 45
-          },
-          {
-            month: 'Mai',
-            volVoz: 682, promVoz: 661, neutrVoz: 15, detraVoz: 6,
-            volWhats: 822, promWhats: 751, neutrWhats: 33, detraWhats: 38
-          },
-          {
-            month: 'Jun',
-            volVoz: 767, promVoz: 733, neutrVoz: 21, detraVoz: 13,
-            volWhats: 272, promWhats: 242, neutrWhats: 17, detraWhats: 13
-          },
-          {
-            month: 'Jul',
-            volVoz: 802, promVoz: 782, neutrVoz: 18, detraVoz: 2,
-            volWhats: 227, promWhats: 208, neutrWhats: 8, detraWhats: 11
-          }
+        // Dados iniciais consolidados (promotores, neutros, detratores de voz + whatsapp)
+        const initialCombinedData = [
+          { month: 'Jan', prom: 973, neutr: 52, detra: 40, isProjected: false },
+          { month: 'Fev', prom: 1334, neutr: 61, detra: 28, isProjected: false },
+          { month: 'Mar', prom: 1243, neutr: 86, detra: 51, isProjected: false },
+          { month: 'Abr', prom: 1396, neutr: 62, detra: 47, isProjected: false },
+          { month: 'Mai', prom: 1412, neutr: 48, detra: 44, isProjected: false },
+          { month: 'Jun', prom: 975, neutr: 38, detra: 26, isProjected: false },
+          { month: 'Jul', prom: 990, neutr: 26, detra: 13, isProjected: false }
         ];
 
-        // Mapeia os meses até Dezembro para a tabela
         const allMonths = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
+        
         // Projeção automática para meses não preenchidos
         const projectionData = useMemo(() => {
           // Calcula a média dos últimos 4 meses de dados existentes (Abril a Julho)
-          const lastFourMonths = initialData.slice(-4);
+          const lastFourMonths = initialCombinedData.slice(-4);
           const avgData = lastFourMonths.reduce((acc, curr) => {
-            acc.promVoz += curr.promVoz;
-            acc.neutrVoz += curr.neutrVoz;
-            acc.detraVoz += curr.detraVoz;
-            acc.promWhats += curr.promWhats;
-            acc.neutrWhats += curr.neutrWhats;
-            acc.detraWhats += curr.detraWhats;
+            acc.prom += curr.prom;
+            acc.neutr += curr.neutr;
+            acc.detra += curr.detra;
             return acc;
-          }, { promVoz: 0, neutrVoz: 0, detraVoz: 0, promWhats: 0, neutrWhats: 0, detraWhats: 0 });
-
-          const avgPromVoz = Math.round(avgData.promVoz / lastFourMonths.length);
-          const avgNeutrVoz = Math.round(avgData.neutrVoz / lastFourMonths.length);
-          const avgDetraVoz = Math.round(avgData.detraVoz / lastFourMonths.length);
-          const avgPromWhats = Math.round(avgData.promWhats / lastFourMonths.length);
-          const avgNeutrWhats = Math.round(avgData.neutrWhats / lastFourMonths.length);
-          const avgDetraWhats = Math.round(avgData.detraWhats / lastFourMonths.length);
-
+          }, { prom: 0, neutr: 0, detra: 0 });
+        
+          const avgProm = Math.round(avgData.prom / lastFourMonths.length);
+          const avgNeutr = Math.round(avgData.neutr / lastFourMonths.length);
+          const avgDetra = Math.round(avgData.detra / lastFourMonths.length);
+        
           // Preenche os meses restantes com a projeção
-          const fullData = [...initialData];
-          for (let i = initialData.length; i < allMonths.length; i++) {
-            const volVoz = avgPromVoz + avgNeutrVoz + avgDetraVoz;
-            const volWhats = avgPromWhats + avgNeutrWhats + avgDetraWhats;
+          const fullData = [...initialCombinedData];
+          for (let i = initialCombinedData.length; i < allMonths.length; i++) {
             fullData.push({
               month: allMonths[i],
-              volVoz,
-              promVoz: avgPromVoz,
-              neutrVoz: avgNeutrVoz,
-              detraVoz: avgDetraVoz,
-              volWhats,
-              promWhats: avgPromWhats,
-              neutrWhats: avgNeutrWhats,
-              detraWhats: avgDetraWhats,
+              prom: avgProm,
+              neutr: avgNeutr,
+              detra: avgDetra,
               isProjected: true, // Marca como dado projetado
             });
           }
           return fullData;
         }, []);
-
+        
         // Estado para armazenar os dados do simulador, inicializado com a projeção
         const [data, setData] = useState(projectionData);
         // Estado para armazenar o volume total de notas para o cálculo inverso
         const [totalNotas, setTotalNotas] = useState(1000);
         const [inverseResults, setInverseResults] = useState([]);
+        const [annualGoalResult, setAnnualGoalResult] = useState(null);
+        const [projectedTotalNotes, setProjectedTotalNotes] = useState(1000); // Estado para a projeção de notas
 
-        // Função para calcular o NPS de um canal
+        // Função para calcular o NPS
         const calculateNps = (promoters, detractors, total) => {
           if (total === 0) return 0;
           return parseFloat(((promoters - detractors) / total) * 100).toFixed(1);
         };
-
-        // Função para calcular o NPS CX combinando os canais
-        const calculateNpsCx = (vozData, whatsData) => {
-          const totalNotas = (vozData.promVoz + vozData.neutrVoz + vozData.detraVoz) +
-                           (whatsData.promWhats + whatsData.neutrWhats + whatsData.detraWhats);
-          const totalPromotores = vozData.promVoz + whatsData.promWhats;
-          const totalDetratores = vozData.detraVoz + whatsData.detraWhats;
-          return calculateNps(totalPromotores, totalDetratores, totalNotas);
-        };
-
+        
         // Projeção do NPS CX com base nos dados
         const npsProjectionData = useMemo(() => {
-          return data.map(monthData => ({
-            ...monthData,
-            npsCx: calculateNpsCx(
-              { promVoz: monthData.promVoz, detrVoz: monthData.detraVoz, neutrVoz: monthData.neutrVoz },
-              { promWhats: monthData.promWhats, detraWhats: monthData.detraWhats, neutrWhats: monthData.neutrWhats }
-            )
-          }));
-        }, [data]);
-
-        // Dados consolidados para a nova tabela
-        const combinedMetrics = useMemo(() => {
           return data.map(monthData => {
-            const totalPromoters = monthData.promVoz + monthData.promWhats;
-            const totalNeutrals = monthData.neutrVoz + monthData.neutrWhats;
-            const totalDetractors = monthData.detraVoz + monthData.detraWhats;
-            const totalVolume = totalPromoters + totalNeutrals + totalDetractors;
-            const nps = calculateNps(totalPromoters, totalDetractors, totalVolume);
+            const totalVolume = monthData.prom + monthData.neutr + monthData.detra;
+            const npsCx = calculateNps(monthData.prom, monthData.detra, totalVolume);
             return {
-              month: monthData.month,
-              totalPromoters,
-              totalNeutrals,
-              totalDetractors,
+              ...monthData,
               totalVolume,
-              nps
+              npsCx
             };
           });
         }, [data]);
-
+        
         // Handle de alteração nos inputs da projeção
-        const handleProjectionChange = (index, channel, type, value) => {
+        const handleProjectionChange = (index, type, value) => {
           const newData = [...data];
-          newData[index][`${type}${channel}`] = parseInt(value, 10) || 0;
-          newData[index][`vol${channel}`] = newData[index][`prom${channel}`] + newData[index][`neutr${channel}`] + newData[index][`detra${channel}`];
+          newData[index][type] = parseInt(value, 10) || 0;
           setData(newData);
         };
-
+        
         // Handle de cálculo do NPS inverso
         const handleInverseCalculation = () => {
           const targetNps = 95;
           const results = [];
           
-          // Lógica do cálculo inverso: Fixamos uma proporção para neutros e resolvemos o sistema
-          // Assumimos que os neutros representam uma média histórica,
-          // que pode ser calculada a partir dos dados iniciais reais (até Julho).
-          const initialTotalNotes = initialData.reduce((sum, d) => sum + d.volVoz + d.volWhats, 0);
-          const initialTotalNeutrals = initialData.reduce((sum, d) => sum + d.neutrVoz + d.neutrWhats, 0);
+          const initialTotalNotes = initialCombinedData.reduce((sum, d) => sum + d.prom + d.neutr + d.detra, 0);
+          const initialTotalNeutrals = initialCombinedData.reduce((sum, d) => sum + d.neutr, 0);
           const neutralRatio = initialTotalNeutrals / initialTotalNotes;
-
+        
           for (let i = 0; i < 12; i++) {
             const notes = totalNotas; // Usa o totalNotas do estado
             const neutrals = Math.round(notes * neutralRatio);
-
+        
             // Usando a fórmula NPS = (Promotores - Detratores) / Total * 100
-            // 95 = (Promotores - Detratores) / notes * 100 => Promotores - Detratores = 0.95 * notes
-            // Sabemos que Promotores + Detratores + Neutros = notes
-            // Promotores + Detratores = notes - neutrals
-            // Resolvemos o sistema de equações lineares:
-            // P - D = 0.95 * notes
-            // P + D = notes - neutrals
             const equation1 = (targetNps / 100) * notes;
             const equation2 = notes - neutrals;
-
+        
             const promoters = Math.round((equation1 + equation2) / 2);
             const detractors = Math.round((equation2 - equation1) / 2);
-
+        
             results.push({
               month: allMonths[i],
               totalNotas: notes,
@@ -324,6 +248,67 @@
           }
           setInverseResults(results);
         };
+        
+        // Nova função para calcular a meta de NPS 95 para o ano
+        const handleAnnualGoalCalculation = () => {
+          const monthsPast = initialCombinedData.length;
+          const monthsToProject = allMonths.length - monthsPast;
+          const annualTargetNps = 95;
+        
+          // Dados acumulados dos meses fechados
+          const pastMetrics = initialCombinedData.reduce((acc, curr) => {
+            acc.totalVolume += curr.prom + curr.neutr + curr.detra;
+            acc.totalPromoters += curr.prom;
+            acc.totalNeutrals += curr.neutr;
+            acc.totalDetractors += curr.detra;
+            return acc;
+          }, { totalVolume: 0, totalPromoters: 0, totalNeutrals: 0, totalDetractors: 0 });
+        
+          // Projeção do volume total para o ano
+          const projectedTotalAnnualVolume = pastMetrics.totalVolume + (monthsToProject * projectedTotalNotes);
+          
+          // Cálculo do NPS acumulado até o momento
+          const currentNps = calculateNps(pastMetrics.totalPromoters, pastMetrics.totalDetractors, pastMetrics.totalVolume);
+
+          // Proporção de neutros com base nos dados fechados
+          const neutralRatio = pastMetrics.totalNeutrals / pastMetrics.totalVolume;
+          
+          // Cálculo da distribuição necessária para atingir a meta anual de 95%
+          const targetPromotersDetractorsSum = projectedTotalAnnualVolume - (projectedTotalAnnualVolume * neutralRatio);
+          const targetPromotersDetractorsDiff = (annualTargetNps / 100) * projectedTotalAnnualVolume;
+          
+          const totalPromotersNeeded = Math.round((targetPromotersDetractorsSum + targetPromotersDetractorsDiff) / 2);
+          const totalDetractorsNeeded = Math.round((targetPromotersDetractorsSum - targetPromotersDetractorsDiff) / 2);
+          const totalNeutralsNeeded = Math.round(projectedTotalAnnualVolume * neutralRatio);
+          
+          const remainingPromotersNeeded = totalPromotersNeeded - pastMetrics.totalPromoters;
+          const remainingDetractorsNeeded = totalDetractorsNeeded - pastMetrics.totalDetractors;
+          const remainingNeutralsNeeded = totalNeutralsNeeded - pastMetrics.totalNeutrals;
+        
+          let isAchievable = true;
+          let maxNps = 0;
+          
+          // Verificar se a meta é alcançável
+          if (remainingPromotersNeeded < 0 || remainingDetractorsNeeded < 0 || remainingNeutralsNeeded < 0) {
+            isAchievable = false;
+            // Se a meta não for alcançável, calculamos o NPS máximo possível
+            const maxPossiblePromoters = pastMetrics.totalPromoters + (monthsToProject * (projectedTotalNotes - Math.round(projectedTotalNotes * neutralRatio)));
+            const maxPossibleDetractors = pastMetrics.totalDetractors; // Detratores não podem ser negativos
+            maxNps = calculateNps(maxPossiblePromoters, maxPossibleDetractors, projectedTotalAnnualVolume);
+          }
+          
+          setAnnualGoalResult({
+            isAchievable,
+            currentNps,
+            projectedTotalAnnualVolume,
+            targetNps: annualTargetNps,
+            maxNps,
+            monthlyPromoters: isAchievable ? Math.round(remainingPromotersNeeded / monthsToProject) : 'N/A',
+            monthlyDetractors: isAchievable ? Math.round(remainingDetractorsNeeded / monthsToProject) : 'N/A',
+            monthlyNeutrals: isAchievable ? Math.round(remainingNeutralsNeeded / monthsToProject) : 'N/A',
+          });
+        };
+        
 
         return (
           <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-sans">
@@ -341,126 +326,118 @@
                     <TabsTrigger value="inverse">Cálculo Inverso (Meta NPS 95)</TabsTrigger>
                   </TabsList>
                   <TabsContent value="projection" className="mt-4">
-                    <h3 className="text-2xl font-semibold mb-4 text-gray-800">Projeção de NPS por Canal</h3>
+                    <h3 className="text-2xl font-semibold mb-4 text-gray-800">Projeção de NPS CX Consolidado</h3>
                     <p className="text-gray-600 mb-6">
-                      Ajuste os volumes de promotores, detratores e neutros para cada canal e veja a projeção do NPS CX.
-                      Os meses sem dados iniciais foram preenchidos com uma projeção automática.
+                      Ajuste os volumes de promotores, detratores e neutros para a visão consolidada de todos os canais e veja a projeção do NPS CX.
                     </p>
                     <div className="overflow-x-auto mb-6">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-red-700 text-white">
                             <th className="p-3 border-r">Mês</th>
-                            <th className="p-3 border-r text-center" colSpan="4">Voz</th>
-                            <th className="p-3 text-center" colSpan="4">Whats</th>
-                          </tr>
-                          <tr className="bg-red-600 text-white">
-                            <th className="p-3 border-r"></th>
-                            <th className="p-3">Promotores</th>
-                            <th className="p-3">Neutros</th>
-                            <th className="p-3">Detratores</th>
-                            <th className="p-3 border-r">Vol. Total</th>
+                            <th className="p-3 border-r">Status</th>
                             <th className="p-3">Promotores</th>
                             <th className="p-3">Neutros</th>
                             <th className="p-3">Detratores</th>
                             <th className="p-3">Vol. Total</th>
+                            <th className="p-3">NPS CX</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {data.map((monthData, index) => (
+                          {npsProjectionData.map((monthData, index) => (
                             <tr key={index} className={`border-b ${monthData.isProjected ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
                               <td className="p-3 font-medium border-r">{monthData.month}</td>
+                              <td className="p-3 border-r text-sm text-center">
+                                <span className={`px-2 py-1 rounded-full text-white ${monthData.isProjected ? 'bg-blue-500' : 'bg-green-600'}`}>
+                                  {monthData.isProjected ? 'Projetado' : 'Fechado'}
+                                </span>
+                              </td>
                               <td className="p-3">
                                 <Input
                                   type="number"
-                                  value={monthData.promVoz}
-                                  onChange={(e) => handleProjectionChange(index, 'Voz', 'prom', e.target.value)}
+                                  value={monthData.prom}
+                                  onChange={(e) => handleProjectionChange(index, 'prom', e.target.value)}
                                   className="w-full text-center"
                                 />
                               </td>
                               <td className="p-3">
                                 <Input
                                   type="number"
-                                  value={monthData.neutrVoz}
-                                  onChange={(e) => handleProjectionChange(index, 'Voz', 'neutr', e.target.value)}
+                                  value={monthData.neutr}
+                                  onChange={(e) => handleProjectionChange(index, 'neutr', e.target.value)}
                                   className="w-full text-center"
                                 />
                               </td>
                               <td className="p-3">
                                 <Input
                                   type="number"
-                                  value={monthData.detraVoz}
-                                  onChange={(e) => handleProjectionChange(index, 'Voz', 'detra', e.target.value)}
+                                  value={monthData.detra}
+                                  onChange={(e) => handleProjectionChange(index, 'detra', e.target.value)}
                                   className="w-full text-center"
                                 />
                               </td>
-                              <td className="p-3 border-r font-bold text-gray-600 text-center">{monthData.volVoz}</td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.promWhats}
-                                  onChange={(e) => handleProjectionChange(index, 'Whats', 'prom', e.target.value)}
-                                  className="w-full text-center"
-                                />
-                              </td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.neutrWhats}
-                                  onChange={(e) => handleProjectionChange(index, 'Whats', 'neutr', e.target.value)}
-                                  className="w-full text-center"
-                                />
-                              </td>
-                              <td className="p-3">
-                                <Input
-                                  type="number"
-                                  value={monthData.detraWhats}
-                                  onChange={(e) => handleProjectionChange(index, 'Whats', 'detra', e.target.value)}
-                                  className="w-full text-center"
-                                />
-                              </td>
-                              <td className="p-3 font-bold text-gray-600 text-center">{monthData.volWhats}</td>
+                              <td className="p-3 font-bold text-gray-600 text-center">{monthData.totalVolume}</td>
+                              <td className="p-3 font-bold text-red-800 text-center">{monthData.npsCx}%</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    <Card className="bg-red-50 border-red-200 mt-8">
+                    
+                    <Card className="bg-blue-50 border-blue-200 mt-8">
                       <CardHeader>
-                        <CardTitle className="text-xl">Resumo Consolidado dos Canais</CardTitle>
+                        <CardTitle className="text-xl">Análise de Meta Anual (NPS 95)</CardTitle>
+                        <CardDescription>
+                          Com base no volume projetado, veja a distribuição necessária para atingir a meta de NPS 95 para o ano.
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
-                            <thead>
-                              <tr className="bg-red-300 text-gray-800">
-                                <th className="p-3">Mês</th>
-                                <th className="p-3">Promotores</th>
-                                <th className="p-3">Neutros</th>
-                                <th className="p-3">Detratores</th>
-                                <th className="p-3">Vol. Total</th>
-                                <th className="p-3">NPS CX</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {combinedMetrics.map((result, index) => (
-                                <tr key={index} className="border-b hover:bg-red-100">
-                                  <td className="p-3 font-medium">{result.month}</td>
-                                  <td className="p-3">{result.totalPromoters}</td>
-                                  <td className="p-3">{result.totalNeutrals}</td>
-                                  <td className="p-3">{result.totalDetractors}</td>
-                                  <td className="p-3">{result.totalVolume}</td>
-                                  <td className="p-3 font-bold text-red-800">{result.nps}%</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                         <div className="flex items-end space-x-4 mb-4">
+                          <div className="flex-grow">
+                            <Label htmlFor="projected-total-notes" className="text-base">Volume de Notas Projetado por Mês</Label>
+                            <Input
+                              id="projected-total-notes"
+                              type="number"
+                              value={projectedTotalNotes}
+                              onChange={(e) => setProjectedTotalNotes(parseInt(e.target.value, 10) || 0)}
+                              className="mt-2 text-center"
+                            />
+                          </div>
+                          <Button onClick={handleAnnualGoalCalculation} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
+                            Calcular Meta Anual
+                          </Button>
                         </div>
+                        {annualGoalResult && (
+                          <div className="mt-4">
+                            <p className="text-lg font-semibold">Resumo do Ano:</p>
+                            <ul className="list-disc list-inside space-y-1 mt-2 text-gray-700">
+                              <li>NPS Acumulado até Julho: <span className="font-bold text-blue-800">{annualGoalResult.currentNps}%</span></li>
+                              <li>Volume Total Anual Projetado: <span className="font-bold">{annualGoalResult.projectedTotalAnnualVolume}</span> notas</li>
+                            </ul>
+                            {annualGoalResult.isAchievable ? (
+                              <div className="mt-4 p-4 rounded-lg bg-green-100 text-green-800 border border-green-300">
+                                <p className="font-bold text-xl">A meta anual de NPS 95% é alcançável!</p>
+                                <p className="mt-2">Para alcançar a meta, a distribuição mensal necessária para os próximos 5 meses é:</p>
+                                <ul className="mt-2 list-disc list-inside font-medium">
+                                  <li>Promotores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyPromoters}</span></li>
+                                  <li>Neutros por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyNeutrals}</span></li>
+                                  <li>Detratores por Mês: <span className="font-bold text-green-900">{annualGoalResult.monthlyDetractors}</span></li>
+                                </ul>
+                              </div>
+                            ) : (
+                              <div className="mt-4 p-4 rounded-lg bg-red-100 text-red-800 border border-red-300">
+                                <p className="font-bold text-xl">Aviso: A meta anual de NPS 95% é inatingível.</p>
+                                <p className="mt-2">O NPS máximo que você pode atingir com o volume de notas projetado é: <span className="font-bold text-red-900">{annualGoalResult.maxNps}%</span>.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
+                    
                     <Card className="bg-red-50 border-red-200 mt-8">
                       <CardHeader>
-                        <CardTitle className="text-xl">Projeção do NPS CX</CardTitle>
+                        <CardTitle className="text-xl">Gráfico de Projeção do NPS CX</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
